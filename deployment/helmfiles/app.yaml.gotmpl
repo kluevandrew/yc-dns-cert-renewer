@@ -1,0 +1,13 @@
+repositories:
+  - name: spoy
+    url: https://git.hte.team/api/v4/projects/95/packages/helm/stable
+    username: helm
+    password: "AooNPw9SJAyfWBgszPB4"  # Один для всех ключ доступа к приватному чарту, не является секретным внутри компании, так как имеет доступ только на чтение
+
+releases:
+  - name: {{ .Values.app.name }}
+    namespace: {{ .Values.app.name }}
+    chart: spoy/microservice
+    version: v1.1.5
+    values:
+      - {{- toYaml .Values | nindent 8 }}

@@ -1,0 +1,210 @@
+image: docker:stable
+
+variables:
+  DOCKER_HOST: tcp://docker:2376
+  DOCKER_TLS_CERTDIR: "/certs"
+  DOCKER_TLS_VERIFY: 1
+  DOCKER_CERT_PATH: "$DOCKER_TLS_CERTDIR/client"
+
+stages:
+  - Tests
+  - Prepare
+  - Pack
+  - Deploy
+
+.go_cache: &go_cache
+  cache:
+    key: "go-deps-${CI_COMMIT_BRANCH}"
+    paths:
+      - .go/pkg/mod/
+  variables:
+    GOPATH: $CI_PROJECT_DIR/.go
+    GOTAGS: "go_json nomsgpack"
+
+.detect_env: &env
+  - '[ -z "$CI_COMMIT_TAG" ] || export ENV=production'
+  - '[ -z "$CI_COMMIT_TAG" ] && [ $CI_COMMIT_BRANCH = "master" ] && export ENV=stage'
+  - '[ -z "$CI_COMMIT_TAG" ] && [ $CI_COMMIT_BRANCH = "develop" ] && export ENV=develop'
+  - '[ -z "$ENV" ] || . ./deployment/environments/${ENV}/environment.sh'
+  - '[ -z "$CI_COMMIT_TAG" ] || export DOCKER_TAG="$CI_COMMIT_TAG"'
+  - '[ -z "$CI_COMMIT_TAG" ] && export DOCKER_TAG="$CI_COMMIT_SHA"'
+  - '[ -z "$CI_COMMIT_TAG" ] && [ $CI_COMMIT_BRANCH = "master" ] && export DOCKER_TAG=stable'
+  - '[ -z "$CI_COMMIT_TAG" ] && [ $CI_COMMIT_BRANCH = "develop" ] && export DOCKER_TAG=latest'
+  - '[ -z "$ENV" ] || echo "Current environment is $ENV"'
+  - '[ -z "$ENV" ] || echo "Current docker image is $CI_REGISTRY_IMAGE:$DOCKER_TAG"'
+
+.common_task:
+  tags:
+    - docker
+  before_script:
+    - *env
+
+.common_helmfile:
+  extends: .common_task
+  image: kluevandrew/yandex-cli:latest
+  dependencies:
+    - Decrypt secrets
+  needs:
+    - job: Decrypt secrets
+      artifacts: true
+  before_script:
+    - *env
+    - sh ./deployment/environments/${ENV}/kubectl.sh.enc
+
+.docker_registry_auth:
+  extends: .common_task
+  before_script:
+    - *env
+    - until docker info; do sleep 1; done # https://gitlab.com/gitlab-org/gitlab-runner/-/issues/27384#note_520701742
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  after_script:
+    - docker logout $CI_REGISTRY
+  services:
+    - name: docker:dind
+      command: ["--mtu=1450"]
+
+.common_golang:
+  extends: .common_task
+  << : *go_cache
+  before_script:
+    - *env
+    - git config --global url."https://gitlab-ci-token:${CI_JOB_TOKEN}@git.hte.team/".insteadOf https://git.hte.team/
+    - go env -w GOPRIVATE=git.hte.team/spoy/*
+
+Tests:
+  extends: .common_golang
+  stage: Tests
+  image: golang:1.17.3-stretch
+  script:
+    - go test ./...
+  interruptible: true
+
+Lint:
+  extends: .common_golang
+  stage: Tests
+  image: golangci/golangci-lint:v1.43.0
+  script:
+    - golangci-lint run -v
+  interruptible: true
+
+Build binary:
+  extends: .common_golang
+  image: golang:1.17.3-stretch
+  stage: Prepare
+  dependencies:
+    - Tests
+    - Lint
+  needs:
+    - job: Tests
+      artifacts: false
+    - job: Lint
+      artifacts: false
+  script:
+    - |
+      find ./cmd/*/main.go -print0 | while read -d $'\0' file
+      do
+        FOLDER=$(dirname "$file")
+        TARGET="build/$(basename "$FOLDER")/main"
+        go build -o "$TARGET" -tags="GOTAGS" -ldflags "-s -w" "$FOLDER"
+      done
+  cache:
+    key: "go-deps-${CI_COMMIT_BRANCH}"
+    paths:
+      - .go/pkg/mod/
+  artifacts:
+    name: binaries
+    paths:
+      - build
+    expire_in: "1w"
+  interruptible: true
+  only:
+    refs:
+      - master
+      - develop
+      - tags
+
+Sops decrypt:
+  interruptible: true
+  image: kluevandrew/sops-age:latest
+  stage: Prepare
+  extends: .common_task
+  artifacts:
+    name: secrets
+    paths:
+      - deployment/environments/develop
+      - deployment/environments/stage
+      - deployment/environments/production
+    expire_in: "15m"
+  script:
+    - echo "${AGE_KEY_B64}" | base64 -d > "${SOPS_AGE_KEY_FILE}"
+    - sopsctl ./deployment/environments/${ENV} decrypt
+  only:
+    refs:
+      - master
+      - develop
+      - tags
+
+Build docker image:
+  extends: .docker_registry_auth
+  stage: Pack
+  dependencies:
+    - Build binary
+  needs:
+    - job: Build binary
+      artifacts: true
+  script:
+    - docker build
+      -t ${CI_REGISTRY_IMAGE}:${DOCKER_TAG}
+      --build-arg PROJECT_NAME=${CI_PROJECT_NAME}
+      -f ./deployment/dockerfiles/Dockerfile
+      .
+    - docker push ${CI_REGISTRY_IMAGE}:${DOCKER_TAG}
+  interruptible: true
+  only:
+    refs:
+      - master
+      - develop
+      - tags
+
+.common_deploy:
+  extends: .common_helmfile
+  stage: Deploy
+  dependencies:
+    - Build docker image
+    - Sops decrypt
+  needs:
+    - job: Build docker image
+      artifacts: false
+    - job: Sops decrypt
+      artifacts: true
+  script:
+    - cd deployment/
+    - helmfile
+      --log-level=info
+      sync
+      --set docker.image=${CI_REGISTRY_IMAGE}
+      --set docker.tag=${DOCKER_TAG}
+      --set app.name=${CI_PROJECT_NAME}
+      --set app.labels.environment=$ENV
+      --set app.labels.commit_sha="${CI_COMMIT_SHA}"
+      --set app.labels.deployed_at="unix-$(date +%s)"
+#
+#Deploy to dev:
+#  extends: .common_deploy
+#  only:
+#    refs:
+#      - develop
+
+#Deploy to stage:
+#  extends: .common_deploy
+#  only:
+#    refs:
+#      - master
+#  when: manual
+#
+#Deploy to prod:
+#  extends: .common_deploy
+#  only:
+#    refs:
+#      - tags
+#  when: manual

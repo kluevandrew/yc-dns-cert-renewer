@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="DataSourceManagerImpl" format="xml" multifile-model="true">
+    <data-source source="LOCAL" name="hydrogen_develop@rc1a-o9blswx4t2zaw1p9.mdb.yandexcloud.net" uuid="4e6b55b3-ca35-4fc3-93a0-c97ea07a19ea">
+      <driver-ref>postgresql</driver-ref>
+      <synchronize>true</synchronize>
+      <jdbc-driver>org.postgresql.Driver</jdbc-driver>
+      <jdbc-url>jdbc:postgresql://rc1a-o9blswx4t2zaw1p9.mdb.yandexcloud.net:6432/hydrogen_develop</jdbc-url>
+      <working-dir>$ProjectFileDir$</working-dir>
+    </data-source>
+  </component>
+</project>

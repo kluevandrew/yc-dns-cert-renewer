@@ -1,0 +1,22 @@
+helmDefaults:
+  wait: true
+  timeout: 600
+  atomic: true
+  recreatePods: false
+  createNamespace: true
+
+repositories:
+  - name: stable
+    url: https://charts.helm.sh/stable
+
+environments:
+  default:
+    values:
+    - {{ requiredEnv "CI_PROJECT_DIR" }}/deployment/environments/values.yaml
+    - {{ requiredEnv "CI_PROJECT_DIR" }}/deployment/environments/{{ requiredEnv "ENV" }}/*.yaml
+    - {{ requiredEnv "CI_PROJECT_DIR" }}/deployment/environments/{{ requiredEnv "ENV" }}/*.yaml.enc
+
+helmfiles:
+  - path: helmfiles/*.yaml.gotmpl
+    values:
+      - {{ toYaml .Environment.Values | nindent 8 }}

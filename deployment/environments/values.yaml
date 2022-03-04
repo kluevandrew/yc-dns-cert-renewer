@@ -1,0 +1,35 @@
+nodeSelector:
+  large_cpu: "true"
+
+dockerconfigjson: ""
+
+docker:
+  image: registry.git.hte.team/infrastructure/yc-dns-cert-renewer
+  tag: latest
+
+app:
+  name: yc-dns-cert-renewer
+  labels:
+    environment: develop
+    commit_sha: ""
+    deployed_at: ""
+  env:
+    YC_ACCOUNT: "=="
+    YC_FOLDER_ID: "b1gbeo6cnpn9efsp4kd3"
+    LE_EMAIL: "admin@hte.team"
+    LE_PRIVATE_KEY: "=="
+    LE_DIRECTORY: "https://acme-v02.api.letsencrypt.org/directory"
+    K8S_MODE: "in_cluster"
+    CERTIFICATES_CONFIG_PATH: "/certificates.conf.yaml"
+
+deployment:
+  replicas: 1
+
+hpa:
+  enabled: false
+
+grpc:
+  enabled: false
+
+http:
+  enabled: false
