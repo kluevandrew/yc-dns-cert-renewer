@@ -188,12 +188,12 @@ Build docker image:
       --set app.labels.environment=$ENV
       --set app.labels.commit_sha="${CI_COMMIT_SHA}"
       --set app.labels.deployed_at="unix-$(date +%s)"
-#
-#Deploy to dev:
-#  extends: .common_deploy
-#  only:
-#    refs:
-#      - develop
+
+Deploy to dev:
+  extends: .common_deploy
+  only:
+    refs:
+      - develop
 
 #Deploy to stage:
 #  extends: .common_deploy

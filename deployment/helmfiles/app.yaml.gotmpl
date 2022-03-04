@@ -8,6 +8,6 @@ releases:
   - name: {{ .Values.app.name }}
     namespace: {{ .Values.app.name }}
     chart: spoy/microservice
-    version: v1.1.5
+    version: v1.1.6
     values:
       - {{- toYaml .Values | nindent 8 }}

@@ -1,3 +1,53 @@
 deployemnt:
   replicas: 1
 
+configmaps:
+  - name: certificates-config
+    data:
+      certificates.conf.yaml: |
+        - secretName: common-ssl-cert
+          namespaces:
+            - traefik-ingress
+            - minio
+            - postgresql
+          domains:
+            - "office1719.hte.team"
+            - "*.office1719.hte.team"
+  
+        - secretName: gitlab-ssl-cert
+          namespaces:
+            - traefik-ingress
+            - gitlab
+          domains:
+            - "git.office1719.hte.team"
+            - "*.git.office1719.hte.team"
+            - "*.pages.git.office1719.hte.team"
+  
+        - secretName: hte-team-ssl-cert
+          namespaces:
+            - traefik-ingress
+            - landing
+          domains:
+            - "hte.team"
+            - "*.hte.team"
+  
+        - secretName: githte-ssl-cert
+          namespaces:
+            - traefik-ingress
+            - gitlab
+          domains:
+            - "git.hte.team"
+            - "*.git.hte.team"
+            - "*.pages.git.hte.team"
+  
+        - secretName: dev-spoy-me-ssl-cert
+          namespaces:
+            - traefik-ingress
+            - actinium
+            - aurum
+            - caesium
+            - hydrogen
+            - krypton
+          domains:
+            - "dev.spoy.me"
+            - "*.dev.spoy.me"

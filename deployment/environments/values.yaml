@@ -7,12 +7,40 @@ docker:
   image: registry.git.hte.team/infrastructure/yc-dns-cert-renewer
   tag: latest
 
+configmaps:
+  - name: certificates-config
+    data:
+      certificates.conf.yaml: |
+        - secretName: common-ssl-cert
+          namespaces:
+            - traefik-ingress
+            - minio
+            - postgresql
+          domains:
+            - "office1719.hte.team"
+            - "*.office1719.hte.team"
+
 app:
   name: yc-dns-cert-renewer
   labels:
     environment: develop
     commit_sha: ""
     deployed_at: ""
+  statefull: true
+  volumes:
+    - name: certificates-volume
+      configMap:
+        name: yc-dns-cert-renewer-certificates-config
+  volumeMounts:
+    archive: "/archive"
+    certificates-volume: "/etc/yc-dns-cert-renewer"
+  volumeClaimTemplates:
+    archive:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: "mz31-hdd-nfs"
+      resources:
+        requests:
+          storage: 2Gi
   env:
     YC_ACCOUNT: "=="
     YC_FOLDER_ID: "b1gbeo6cnpn9efsp4kd3"
@@ -20,7 +48,8 @@ app:
     LE_PRIVATE_KEY: "=="
     LE_DIRECTORY: "https://acme-v02.api.letsencrypt.org/directory"
     K8S_MODE: "in_cluster"
-    CERTIFICATES_CONFIG_PATH: "/certificates.conf.yaml"
+    CERTIFICATES_CONFIG_PATH: "/etc/yc-dns-cert-renewer/certificates.conf.yaml"
+    ARCHIVE_PATH: "/archive"
 
 deployment:
   replicas: 1
@@ -33,3 +62,8 @@ grpc:
 
 http:
   enabled: false
+
+serviceAccount:
+  create: true
+  name: "yc-dns-cert-renewer"
+  clusterRole: "cluster-admin"

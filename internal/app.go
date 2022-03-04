@@ -63,7 +63,7 @@ func (app *App) Tick() error {
 		if err != nil {
 			fmt.Printf("%s cert is not exists [ns]%s\nError: %s", cert.SecretName, firstNs, err.Error())
 
-			renew = false
+			renew = true
 		} else {
 			sslCert, err := app.ParseCert(secret.Data["tls.crt"])
 			if err != nil {
